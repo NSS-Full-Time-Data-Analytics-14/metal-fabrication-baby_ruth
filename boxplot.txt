@@ -1,0 +1,63 @@
+from sqlalchemy import create_engine, text
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import re
+
+database_name = 'metal_fabrication'    # Fill this in with your lahman database name
+
+connection_string = f"postgresql://postgres:POSTGRES@localhost:5432/{database_name}"
+
+engine = create_engine(connection_string)
+
+query4 = """WITH job_operations AS(SELECT jmo_job_id, jmo_process_short_description, jmo_process_id, jmo_estimated_production_hours
+					  FROM job_operations_2023
+					  UNION 
+					  SELECT jmo_job_id, jmo_process_short_description, jmo_process_id, jmo_estimated_production_hours
+					  FROM job_operations_2024),
+
+other_tables AS 
+(SELECT * 
+FROM sales_order_job_links INNER JOIN jobs ON omj_job_id = jmp_job_id
+                           INNER JOIN job_operations ON jmp_job_id = jmo_job_id)
+						   
+SELECT DISTINCT oml_sales_order_line_id, jmo_process_short_description, jmo_process_id, jmo_estimated_production_hours, jmp_scheduled_due_date, jmp_scheduled_start_date, jmp_created_date, jmp_completed_date, oml_sales_order_id, oml_part_id, oml_part_short_description, oml_order_quantity, oml_full_unit_price_base, oml_full_extended_price_base, omp_full_order_subtotal_base
+FROM sales_order_lines INNER JOIN sales_orders ON omp_sales_order_id = oml_sales_order_id
+                       INNER JOIN other_tables ON oml_sales_order_id = omj_sales_order_id"""
+
+with engine.connect() as connection:
+query4 = pd.read_sql(text(query4), con = connection)
+
+# Calculated Days Completed for each row
+
+query4['days_completed'] = (query4['jmp_completed_date'] - query4['jmp_created_date']).astype('str')
+
+# Extracted number of days
+
+query4['days_completed'] = query4['days_completed'].str.extract(r'(\d+)\s')
+
+# Got rid of data where days_completed is NaN
+
+query4 = query4.loc[~query4['days_completed'].isna()]
+
+# Converted number of days back to integer
+
+query4['days_completed'] = query4['days_completed'].astype('int64')
+
+# Did statistics for days_completed when grouped by jmo_process_id, sorted by 'count' and selected top 10
+# added column for jmo_process_id because I wasn't able to reference those strings when they are used as an index
+
+completion_times_top10 = query4.groupby('jmo_process_id')['days_completed'].describe().sort_values('count', ascending=False).head(10)
+completion_times_top10['jmo_process_id'] = completion_times_top10.index.tolist()
+completion_times_top10
+
+# Selected all data where the jmo_process_id was in the top 10 
+
+boxes = query4.loc[query4['jmo_process_id'].isin(completion_times_top10['jmo_process_id'])]
+
+# Boxplot with x-axis as various processes and y axis as days_completed column
+
+plt.figure(figsize=(12,8))
+sns.boxplot(data=boxes, x='jmo_process_id', y='days_completed', color='#be202f').set(title='Distribution of Completion Times (Days) for Top 10 Procces IDs')
+plt.savefig("boxplot_top10.png", transparent=True)
+plt.show()

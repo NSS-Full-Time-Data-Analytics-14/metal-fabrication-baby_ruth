@@ -164,5 +164,24 @@ FROM sales_order_job_links INNER JOIN jobs ON omj_job_id = jmp_job_id
 SELECT DISTINCT oml_sales_order_line_id, jmo_process_short_description, jmo_estimated_production_hours, jmp_scheduled_due_date, jmp_scheduled_start_date, jmp_completed_date, oml_sales_order_id, oml_part_id, oml_part_short_description, oml_order_quantity, oml_full_unit_price_base, oml_full_extended_price_base, omp_full_order_subtotal_base
 FROM sales_order_lines INNER JOIN sales_orders ON omp_sales_order_id = oml_sales_order_id
                        INNER JOIN other_tables ON oml_sales_order_id = omj_sales_order_id
+					   
+
+WITH job_operations AS(SELECT jmo_job_id, jmo_process_short_description, jmo_process_id, jmo_estimated_production_hours
+					  FROM job_operations_2023
+					  UNION 
+					  SELECT jmo_job_id, jmo_process_short_description, jmo_process_id, jmo_estimated_production_hours
+					  FROM job_operations_2024),
+
+other_tables AS 
+(SELECT * 
+FROM sales_order_job_links INNER JOIN jobs ON omj_job_id = jmp_job_id
+                           INNER JOIN job_operations ON jmp_job_id = jmo_job_id)
+						   
+SELECT DISTINCT oml_sales_order_line_id, jmo_process_short_description, jmo_process_id, jmo_estimated_production_hours, jmp_scheduled_due_date, jmp_scheduled_start_date, jmp_created_date, jmp_completed_date, oml_sales_order_id, oml_part_id, oml_part_short_description, oml_order_quantity, oml_full_unit_price_base, oml_full_extended_price_base, omp_full_order_subtotal_base
+FROM sales_order_lines INNER JOIN sales_orders ON omp_sales_order_id = oml_sales_order_id
+                       INNER JOIN other_tables ON oml_sales_order_id = omj_sales_order_id
+					   WHERE oml_sales_order_id = 33381
+				
+					   
 
 
